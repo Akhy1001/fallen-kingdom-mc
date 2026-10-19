@@ -78,6 +78,59 @@ public class FkCommand implements CommandExecutor, TabCompleter {
             case "join" -> handleJoin(sender, args);
             case "team" -> handleTeam(sender, args);
             case "base" -> handleBase(sender, args);
+            case "start" -> {
+                if (!sender.hasPermission("fk.admin")) {
+                    sender.sendMessage(messages.get("no-permission"));
+                    return true;
+                }
+                String error = gameManager.startGame();
+                if (error != null) {
+                    sender.sendMessage(error);
+                }
+            }
+            case "pause" -> {
+                if (!sender.hasPermission("fk.admin")) {
+                    sender.sendMessage(messages.get("no-permission"));
+                    return true;
+                }
+                if (!gameManager.pauseGame()) {
+                    sender.sendMessage(messages.get("game-not-running"));
+                }
+            }
+            case "resume" -> {
+                if (!sender.hasPermission("fk.admin")) {
+                    sender.sendMessage(messages.get("no-permission"));
+                    return true;
+                }
+                if (!gameManager.resumeGame()) {
+                    sender.sendMessage(Messages.colorize("&cLa partie n'est pas en pause."));
+                }
+            }
+            case "stop" -> {
+                if (!sender.hasPermission("fk.admin")) {
+                    sender.sendMessage(messages.get("no-permission"));
+                    return true;
+                }
+                gameManager.stopGame();
+            }
+            case "day" -> {
+                if (!sender.hasPermission("fk.admin")) {
+                    sender.sendMessage(messages.get("no-permission"));
+                    return true;
+                }
+                if (args.length < 2) {
+                    sender.sendMessage(Messages.colorize("&cUsage: /fk day <n>"));
+                    return true;
+                }
+                try {
+                    int day = Integer.parseInt(args[1]);
+                    if (day < 1) throw new NumberFormatException();
+                    gameManager.getDayScheduler().forceDay(day);
+                    sender.sendMessage(messages.get("day-forced").replace("{day}", String.valueOf(day)));
+                } catch (NumberFormatException e) {
+                    sender.sendMessage(Messages.colorize("&cLe numéro du jour doit être un entier supérieur ou égal à 1."));
+                }
+            }
             default -> sender.sendMessage(messages.get("unknown-command"));
         }
         return true;
@@ -120,7 +173,6 @@ public class FkCommand implements CommandExecutor, TabCompleter {
             }
 
             Region region;
-            // Option 1 : /fk base set <équipe> <rayon> (autour de l'admin)
             if (args.length >= 4) {
                 try {
                     int radius = Integer.parseInt(args[3]);
@@ -131,7 +183,6 @@ public class FkCommand implements CommandExecutor, TabCompleter {
                     return;
                 }
             } else {
-                // Option 2 : /fk base set <équipe> (avec les 2 coins de la baguette)
                 if (!baseManager.hasCompleteSelection(player.getUniqueId())) {
                     player.sendMessage(messages.get("selection-incomplete"));
                     return;
@@ -292,7 +343,7 @@ public class FkCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(Messages.colorize("&6&m---&r &6&lFallen Kingdom - Infos &6&m---"));
         sender.sendMessage(Messages.colorize("&eÉtat : &f" + gameManager.getState().name()));
         sender.sendMessage(Messages.colorize("&eJour actuel : &fJ" + gameManager.getCurrentDay()
-                + " &7(" + configService.getDayDurationMinutes() + " min/jour)"));
+                + " &7(Temps restant : &e" + gameManager.getDayScheduler().getFormattedTimeLeft() + "&7)"));
         sender.sendMessage(Messages.colorize("&eDéblocages : "
                 + formatUnlock("PvP (J" + configService.getPvpDay() + ")", gameManager.isPvpUnlocked()) + " &7| "
                 + formatUnlock("Nether (J" + configService.getNetherDay() + ")", gameManager.isNetherUnlocked()) + " &7| "
@@ -341,6 +392,9 @@ public class FkCommand implements CommandExecutor, TabCompleter {
             }
             if (args[0].equalsIgnoreCase("base") && sender.hasPermission("fk.admin")) {
                 return filter(List.of("wand", "set"), args[1]);
+            }
+            if (args[0].equalsIgnoreCase("day") && sender.hasPermission("fk.admin")) {
+                return filter(List.of("1", "2", "3", "4", "5", "6", "7"), args[1]);
             }
         }
 

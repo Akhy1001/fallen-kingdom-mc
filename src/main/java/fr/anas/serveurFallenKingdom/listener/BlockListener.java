@@ -82,6 +82,13 @@ public class BlockListener implements Listener {
     @EventHandler
     public void onBlockPlace(BlockPlaceEvent event) {
         Player player = event.getPlayer();
+
+        if (gameManager.getState() == GameState.PAUSED) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage(messages.get("action-paused"));
+            return;
+        }
+
         // L'admin en Créatif hors RUNNING peut préparer la map librement
         if (player.getGameMode() == GameMode.CREATIVE && gameManager.getState() != GameState.RUNNING) {
             return;
@@ -96,6 +103,12 @@ public class BlockListener implements Listener {
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
         Player player = event.getPlayer();
+        if (gameManager.getState() == GameState.PAUSED) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage(messages.get("action-paused"));
+            return;
+        }
+
         if (player.getGameMode() == GameMode.CREATIVE && gameManager.getState() != GameState.RUNNING) {
             return;
         }
