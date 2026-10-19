@@ -1,0 +1,6 @@
+name: serveur-fallen-kingdom
+version: '${version}'
+
+main: fr.anas.serveurFallenKingdom.ServeurFallenKingdom
+api-version: '1.21.4'
+load: POSTWORLD
