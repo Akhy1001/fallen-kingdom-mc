@@ -1,0 +1,26 @@
+game:
+  day-duration-minutes: 20
+  max-teams: 4
+  max-players-per-team: 5
+  friendly-fire: false
+
+unlocks:
+  pvp: 3
+  nether: 4
+  assault: 5
+  end: 7
+
+altar:
+  block: BEACON
+  capture-seconds: 30
+  capture-radius: 3
+
+build:
+  allowed-outside-base:
+    - TORCH
+    - LADDER
+    - TNT
+
+scoreboard:
+  enabled: true
+  title: "&6&lFallen Kingdom"

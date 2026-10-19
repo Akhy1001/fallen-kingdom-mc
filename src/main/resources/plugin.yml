@@ -1,6 +1,19 @@
-name: serveur-fallen-kingdom
-version: '${version}'
-
+name: ServeurFallenKingdom
+version: '1.0'
 main: fr.anas.serveurFallenKingdom.ServeurFallenKingdom
-api-version: '1.21.4'
-load: POSTWORLD
+api-version: '1.21'
+authors: [ Anas ]
+description: Plugin Fallen Kingdom en 1.21.x
+
+commands:
+  fk:
+    description: Commande principale du Fallen Kingdom
+    usage: /fk <subcommand>
+
+permissions:
+  fk.admin:
+    description: Accès aux commandes administrateur du Fallen Kingdom
+    default: op
+  fk.player:
+    description: Accès aux commandes joueur du Fallen Kingdom
+    default: true
