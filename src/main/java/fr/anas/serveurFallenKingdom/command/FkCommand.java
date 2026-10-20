@@ -1,5 +1,6 @@
 package fr.anas.serveurFallenKingdom.command;
 
+import fr.anas.serveurFallenKingdom.altar.AltarManager;
 import fr.anas.serveurFallenKingdom.base.BaseManager;
 import fr.anas.serveurFallenKingdom.base.Region;
 import fr.anas.serveurFallenKingdom.config.ConfigService;
@@ -11,6 +12,8 @@ import fr.anas.serveurFallenKingdom.team.Team;
 import fr.anas.serveurFallenKingdom.team.TeamManager;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
+import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -32,18 +35,20 @@ public class FkCommand implements CommandExecutor, TabCompleter {
     private final GameManager gameManager;
     private final TeamManager teamManager;
     private final BaseManager baseManager;
+    private final AltarManager altarManager;
 
     private static final List<String> ALLOWED_COLORS = List.of(
             "RED", "BLUE", "GREEN", "YELLOW", "AQUA", "LIGHT_PURPLE", "GOLD", "DARK_GREEN", "DARK_AQUA", "WHITE"
     );
 
     public FkCommand(ConfigService configService, Messages messages, GameManager gameManager,
-                     TeamManager teamManager, BaseManager baseManager) {
+                     TeamManager teamManager, BaseManager baseManager, AltarManager altarManager) {
         this.configService = configService;
         this.messages = messages;
         this.gameManager = gameManager;
         this.teamManager = teamManager;
         this.baseManager = baseManager;
+        this.altarManager = altarManager;
     }
 
     @Override
@@ -78,6 +83,7 @@ public class FkCommand implements CommandExecutor, TabCompleter {
             case "join" -> handleJoin(sender, args);
             case "team" -> handleTeam(sender, args);
             case "base" -> handleBase(sender, args);
+            case "altar" -> handleAltar(sender, args);
             case "start" -> {
                 if (!sender.hasPermission("fk.admin")) {
                     sender.sendMessage(messages.get("no-permission"));
@@ -134,6 +140,45 @@ public class FkCommand implements CommandExecutor, TabCompleter {
             default -> sender.sendMessage(messages.get("unknown-command"));
         }
         return true;
+    }
+
+    private void handleAltar(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(messages.get("only-players"));
+            return;
+        }
+        if (!player.hasPermission("fk.admin")) {
+            player.sendMessage(messages.get("no-permission"));
+            return;
+        }
+        if (gameManager.getState() == GameState.RUNNING) {
+            player.sendMessage(messages.get("command-locked-running"));
+            return;
+        }
+        if (args.length < 3 || !args[1].equalsIgnoreCase("set")) {
+            player.sendMessage(Messages.colorize("&cUsage: /fk altar set <équipe>"));
+            return;
+        }
+
+        Team team = teamManager.getTeam(args[2]);
+        if (team == null) {
+            player.sendMessage(messages.get("team-not-found"));
+            return;
+        }
+
+        Block targetBlock = player.getTargetBlockExact(5);
+        if (targetBlock == null || targetBlock.getType().isAir()) {
+            player.sendMessage(messages.get("altar-no-target"));
+            return;
+        }
+
+        Location loc = targetBlock.getLocation();
+        altarManager.setAltar(team, loc);
+        player.sendMessage(messages.get("altar-set")
+                .replace("{team}", team.getColoredName())
+                .replace("{x}", String.valueOf(loc.getBlockX()))
+                .replace("{y}", String.valueOf(loc.getBlockY()))
+                .replace("{z}", String.valueOf(loc.getBlockZ())));
     }
 
     private void handleBase(CommandSender sender, String[] args) {
@@ -356,9 +401,12 @@ public class FkCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage(Messages.colorize("&eÉquipes (" + teamManager.getAllTeams().size() + ") :"));
             for (Team t : teamManager.getAllTeams()) {
                 boolean hasBase = baseManager.getBase(t) != null;
+                boolean hasAltar = altarManager.getAltar(t) != null;
+                String altarStatus = !hasAltar ? "&c[Sans Autel]" : (t.isAltarAlive() ? "&a[Autel Intact]" : "&4[Autel Capturé]");
                 sender.sendMessage(Messages.colorize(" &7- " + t.getColoredName()
                         + " &7(" + t.getSize() + "/" + configService.getMaxPlayersPerTeam() + " joueurs) "
-                        + (hasBase ? "&a[Base OK]" : "&c[Sans Base]")));
+                        + (hasBase ? "&a[Base OK] " : "&c[Sans Base] ")
+                        + altarStatus));
             }
         }
     }
@@ -393,6 +441,9 @@ public class FkCommand implements CommandExecutor, TabCompleter {
             if (args[0].equalsIgnoreCase("base") && sender.hasPermission("fk.admin")) {
                 return filter(List.of("wand", "set"), args[1]);
             }
+            if (args[0].equalsIgnoreCase("altar") && sender.hasPermission("fk.admin")) {
+                return filter(List.of("set"), args[1]);
+            }
             if (args[0].equalsIgnoreCase("day") && sender.hasPermission("fk.admin")) {
                 return filter(List.of("1", "2", "3", "4", "5", "6", "7"), args[1]);
             }
@@ -405,7 +456,7 @@ public class FkCommand implements CommandExecutor, TabCompleter {
             if (args[0].equalsIgnoreCase("team") && args[1].equalsIgnoreCase("add")) {
                 return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(), args[2]);
             }
-            if (args[0].equalsIgnoreCase("base") && args[1].equalsIgnoreCase("set")) {
+            if ((args[0].equalsIgnoreCase("base") || args[0].equalsIgnoreCase("altar")) && args[1].equalsIgnoreCase("set")) {
                 return filter(teamManager.getAllTeams().stream().map(Team::getName).toList(), args[2]);
             }
         }

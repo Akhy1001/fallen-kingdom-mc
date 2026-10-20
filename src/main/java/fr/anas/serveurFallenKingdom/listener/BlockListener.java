@@ -1,5 +1,6 @@
 package fr.anas.serveurFallenKingdom.listener;
 
+import fr.anas.serveurFallenKingdom.altar.AltarManager;
 import fr.anas.serveurFallenKingdom.base.Base;
 import fr.anas.serveurFallenKingdom.base.BaseManager;
 import fr.anas.serveurFallenKingdom.config.ConfigService;
@@ -28,7 +29,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Gère la sélection de base, la protection des blocs (F06) et l'entrée/sortie de base (F07).
+ * Gère la sélection de base, la protection des blocs et des autels (F06, F13) et l'entrée/sortie de base (F07).
  */
 public class BlockListener implements Listener {
 
@@ -37,19 +38,20 @@ public class BlockListener implements Listener {
     private final GameManager gameManager;
     private final TeamManager teamManager;
     private final BaseManager baseManager;
+    private final AltarManager altarManager;
 
     private final Map<UUID, String> lastBaseEntered = new HashMap<>();
 
     public BlockListener(ConfigService configService, Messages messages, GameManager gameManager,
-                         TeamManager teamManager, BaseManager baseManager) {
+                         TeamManager teamManager, BaseManager baseManager, AltarManager altarManager) {
         this.configService = configService;
         this.messages = messages;
         this.gameManager = gameManager;
         this.teamManager = teamManager;
         this.baseManager = baseManager;
+        this.altarManager = altarManager;
     }
 
-    // --- 1. Baguette de sélection (F05) ---
     @EventHandler
     public void onWandInteract(PlayerInteractEvent event) {
         if (event.getHand() != EquipmentSlot.HAND) return;
@@ -78,18 +80,14 @@ public class BlockListener implements Listener {
         }
     }
 
-    // --- 2. Pose de blocs (F06) ---
     @EventHandler
     public void onBlockPlace(BlockPlaceEvent event) {
-        Player player = event.getPlayer();
-
         if (gameManager.getState() == GameState.PAUSED) {
             event.setCancelled(true);
             event.getPlayer().sendMessage(messages.get("action-paused"));
             return;
         }
-
-        // L'admin en Créatif hors RUNNING peut préparer la map librement
+        Player player = event.getPlayer();
         if (player.getGameMode() == GameMode.CREATIVE && gameManager.getState() != GameState.RUNNING) {
             return;
         }
@@ -99,23 +97,26 @@ public class BlockListener implements Listener {
         }
     }
 
-    // --- 3. Casse de blocs (F06) ---
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
-        Player player = event.getPlayer();
         if (gameManager.getState() == GameState.PAUSED) {
             event.setCancelled(true);
             event.getPlayer().sendMessage(messages.get("action-paused"));
             return;
         }
 
+        // F13 : L'autel est strictement indestructible
+        if (altarManager.getAltarAt(event.getBlock().getLocation()) != null) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage(messages.get("altar-indestructible"));
+            return;
+        }
+
+        Player player = event.getPlayer();
         if (player.getGameMode() == GameMode.CREATIVE && gameManager.getState() != GameState.RUNNING) {
             return;
         }
 
-        // Note : En Fallen Kingdom classique, on peut miner sous terre (hors surface) ou selon la liste blanche.
-        // Ici on applique strictement la spec 3.3 et F06 : hors de sa base, seuls les blocs de la liste blanche
-        // peuvent être posés ou cassés.
         if (!canModifyBlock(player, event.getBlock().getLocation(), event.getBlock().getType(), false)) {
             event.setCancelled(true);
         }
@@ -125,18 +126,14 @@ public class BlockListener implements Listener {
         Team playerTeam = teamManager.getPlayerTeam(player.getUniqueId());
         Base targetBase = baseManager.getBaseAt(blockLoc);
 
-        // Cas A : Le bloc est dans une base
         if (targetBase != null) {
-            // C'est la base du joueur -> tout est autorisé (sauf TNT avant assaut si souhaité, mais dans sa base il construit)
             if (playerTeam != null && targetBase.getTeamName().equalsIgnoreCase(playerTeam.getName())) {
                 return true;
             }
-            // C'est une base ennemie -> strictement interdit avant le jour des assauts (J5)
             if (!gameManager.isAssaultUnlocked()) {
                 player.sendMessage(messages.get("build-enemy-blocked"));
                 return false;
             }
-            // Après J5 (Assauts actifs) : dans une base ennemie, on autorise uniquement la liste blanche (dont TNT)
             if (material == Material.TNT || configService.getAllowedOutsideBase().contains(material)) {
                 return true;
             }
@@ -144,7 +141,6 @@ public class BlockListener implements Listener {
             return false;
         }
 
-        // Cas B : Le bloc est HORS de toute base (Nature)
         if (material == Material.TNT) {
             if (!gameManager.isAssaultUnlocked()) {
                 player.sendMessage(messages.get("tnt-before-assault"));
@@ -153,7 +149,6 @@ public class BlockListener implements Listener {
             return true;
         }
 
-        // En nature, pour la POSE de blocs : uniquement la liste blanche (TORCH, LADDER...)
         if (isPlacing) {
             if (configService.getAllowedOutsideBase().contains(material)) {
                 return true;
@@ -162,9 +157,6 @@ public class BlockListener implements Listener {
             return false;
         }
 
-        // En nature, pour la CASSE (Récolte J1 - spec 3.2 : "Récolte, construction dans sa base uniquement") :
-        // Si vous voulez autoriser la récolte des ressources en nature (minerais, bois) mais bloquer la pose :
-        // Décommente la ligne ci-dessous si tu veux que la casse hors base soit aussi restreinte à la liste blanche.
         if (!configService.getAllowedOutsideBase().contains(material)) {
             player.sendMessage(messages.get("build-outside-blocked"));
             return false;
@@ -172,15 +164,16 @@ public class BlockListener implements Listener {
         return true;
     }
 
-    // --- 4. Protection des bases contre les explosions avant J5 ---
     @EventHandler
     public void onExplode(EntityExplodeEvent event) {
+        // Les autels ne peuvent jamais exploser (F13)
+        event.blockList().removeIf(block -> altarManager.getAltarAt(block.getLocation()) != null);
+
         if (!gameManager.isAssaultUnlocked()) {
             event.blockList().removeIf(block -> baseManager.getBaseAt(block.getLocation()) != null);
         }
     }
 
-    // --- 5. Notification d'entrée / sortie de base (F07) ---
     @EventHandler
     public void onMove(PlayerMoveEvent event) {
         Location from = event.getFrom();
