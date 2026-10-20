@@ -221,4 +221,22 @@ public class GameManager {
     public boolean isNetherUnlocked() { return currentDay >= configService.getNetherDay(); }
     public boolean isAssaultUnlocked() { return currentDay >= configService.getAssaultDay(); }
     public boolean isEndUnlocked() { return currentDay >= configService.getEndDay(); }
+
+    public Map<UUID, Integer> getKillsMap() { return kills; }
+    public Map<UUID, Integer> getDeathsMap() { return deaths; }
+    public Map<UUID, Integer> getCapturesMap() { return captures; }
+
+    /**
+     * Reprend la partie exactement au même jour et temps restant après un redémarrage (F21).
+     */
+    public void restoreFromStorage(GameState loadedState, int day, int remainingSeconds) {
+        this.state = loadedState;
+        this.currentDay = Math.max(1, day);
+        this.dayScheduler.setRemainingSeconds(remainingSeconds);
+
+        if (loadedState == GameState.RUNNING || loadedState == GameState.PAUSED) {
+            this.dayScheduler.startTask();
+            this.captureTask.start();
+        }
+    }
 }

@@ -21,6 +21,14 @@ public class AltarManager {
         this.configService = configService;
     }
 
+    public Altar restoreAltar(Team team, Location blockLocation, boolean captured) {
+        Altar altar = new Altar(team.getName(), blockLocation);
+        altar.setCaptured(captured);
+        altars.put(team.getName().toLowerCase(), altar);
+        team.setAltarAlive(!captured);
+        return altar;
+    }
+
     public Altar setAltar(Team team, Location blockLocation) {
         blockLocation.getBlock().setType(configService.getAltarBlock());
         Altar existing = altars.get(team.getName().toLowerCase());
